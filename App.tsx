@@ -115,92 +115,104 @@ const App: React.FC = () => {
 
     const handleThemeChange = () => setTheme(theme === 'light' ? 'dark' : 'light');
 
- // Auth effect
-React.useEffect(() => {
-    let isMounted = true;
-
-    const initAuth = async () => {
-        try {
-            // If keys are missing, don't even try to fetch, just set loaded and return
-            if (!isConfigured) {
-                console.log("Supabase not configured, skipping auth check.");
-                if (isMounted) setLoading(false);
-                return;
+    // Safety Timeout Effect
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            if (loading) {
+                console.warn("Safety timeout triggered: Force stopping loading state to prevent infinite loop.");
+                setLoading(false);
             }
+        }, 7000); // 7 seconds timeout
 
-            const { data: { session }, error } = await supabase.auth.getSession();
-            if (error) throw error;
+        return () => clearTimeout(timer);
+    }, [loading]);
 
-            if (!isMounted) return;
+    // Auth effect
+    React.useEffect(() => {
+        let isMounted = true;
 
-            setSession(session);
-
-            if (session?.user) {
-                const { data, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
-                
-                if (profileError) {
-                    console.error('Error fetching profile:', profileError);
-                    setProfile(null);
-                } else {
-                    setProfile(data);
+        const initAuth = async () => {
+            try {
+                // If keys are missing, don't even try to fetch, just set loaded and return
+                if (!isConfigured) {
+                    console.log("Supabase not configured, skipping auth check.");
+                    if (isMounted) setLoading(false);
+                    return;
                 }
-            } else {
-                setProfile(null);
-            }
-        } catch (err) {
-            console.error("Supabase initialization failed (check .env or network):", err);
-            // In case of fetch error (e.g. missing keys/network), prevent crash by assuming no session
-            if (isMounted) {
-                setSession(null);
-                setProfile(null);
-            }
-        } finally {
-            if (isMounted) setLoading(false);
-        }
-    };
 
-    initAuth();
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) throw error;
 
-    // Only subscribe if configured
-    if (isConfigured) {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            if (!isMounted) return;
-            setSession(session);
-            if (session?.user) {
-                try {
-                    const { data, error } = await supabase
+                if (!isMounted) return;
+
+                setSession(session);
+
+                if (session?.user) {
+                    const { data, error: profileError } = await supabase
                         .from('profiles')
                         .select('*')
                         .eq('id', session.user.id)
                         .single();
                     
-                    if (error) {
-                        console.error('Error fetching profile on auth change:', error);
+                    if (profileError) {
+                        console.error('Error fetching profile:', profileError);
                         setProfile(null);
                     } else {
                         setProfile(data);
                     }
-                } catch (err) {
-                     console.error("Profile fetch error:", err);
-                     setProfile(null);
+                } else {
+                    setProfile(null);
                 }
-            } else {
-                setProfile(null);
+            } catch (err) {
+                console.error("Supabase initialization failed (check .env or network):", err);
+                // In case of fetch error (e.g. missing keys/network), prevent crash by assuming no session
+                if (isMounted) {
+                    setSession(null);
+                    setProfile(null);
+                }
+            } finally {
+                if (isMounted) setLoading(false);
             }
-        });
-
-        return () => {
-            isMounted = false;
-            subscription.unsubscribe();
         };
-    } else {
-        return () => { isMounted = false; };
-    }
-}, []);
+
+        initAuth();
+
+        // Only subscribe if configured
+        if (isConfigured) {
+            const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+                if (!isMounted) return;
+                setSession(session);
+                if (session?.user) {
+                    try {
+                        const { data, error } = await supabase
+                            .from('profiles')
+                            .select('*')
+                            .eq('id', session.user.id)
+                            .single();
+                        
+                        if (error) {
+                            console.error('Error fetching profile on auth change:', error);
+                            setProfile(null);
+                        } else {
+                            setProfile(data);
+                        }
+                    } catch (err) {
+                         console.error("Profile fetch error:", err);
+                         setProfile(null);
+                    }
+                } else {
+                    setProfile(null);
+                }
+            });
+
+            return () => {
+                isMounted = false;
+                subscription.unsubscribe();
+            };
+        } else {
+            return () => { isMounted = false; };
+        }
+    }, []);
 
     // Handle password recovery flow
     React.useEffect(() => {
