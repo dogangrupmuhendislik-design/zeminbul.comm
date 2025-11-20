@@ -1,6 +1,7 @@
+
 import * as React from 'react';
 import { Service } from '../types';
-import { supabase } from '../utils/supabaseClient';
+import { supabase, isConfigured } from '../utils/supabaseClient';
 import { SERVICES } from '../constants'; // Import the fallback services
 
 interface CategoriesContextType {
@@ -20,6 +21,16 @@ export const CategoriesProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const fetchCategories = React.useCallback(async () => {
         setLoading(true);
         setError(null);
+        
+        // GÜVENLİK ÖNLEMİ: Eğer Supabase ayarları yoksa, boşuna sunucuya bağlanıp vakit kaybetme.
+        // Doğrudan varsayılan (static) verileri yükle ve yüklemeyi bitir.
+        if (!isConfigured) {
+             console.warn("Supabase configured değil, varsayılan kategoriler kullanılıyor.");
+             setCategories(SERVICES);
+             setLoading(false);
+             return;
+        }
+
         try {
             // NOTE FOR DEVELOPER: This feature requires a 'services' table in Supabase.
             // The table should contain columns: id (uuid), name (text), description (text), icon_name (text), imageUrl (text).
